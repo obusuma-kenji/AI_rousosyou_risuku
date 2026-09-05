@@ -1,0 +1,1 @@
+# AI_rousosyou_risuku
