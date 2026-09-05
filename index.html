@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI労務指導・面談記録支援システム</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'Noto Sans JP', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef8ff',
+              100: '#d8eeff',
+              500: '#0284c7',
+              600: '#0369a1',
+              700: '#075985',
+              900: '#0c4a6e',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-feature-settings: "palt";
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 3px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
+
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-600 to-indigo-600 flex items-center justify-center text-white shadow-md">
+            <i class="fa-solid fa-scale-balanced text-lg"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <h1 class="text-lg font-bold text-slate-900 tracking-tight">AI労務指導・面談記録支援システム</h1>
+              <span class="text-xs px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 font-semibold border border-sky-200">向井蘭弁護士メソッド準拠</span>
+            </div>
+            <p class="text-xs text-slate-500">客観的記録の蓄積 × 感情を排した指導 × 労務リスク予防</p>
+          </div>
+        </div>
+        <div class="flex items-center space-x-3">
+          <button id="btn-export-all" class="px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-300 transition-colors flex items-center space-x-1.5">
+            <i class="fa-solid fa-file-export"></i>
+            <span>記録エクスポート (JSON)</span>
+          </button>
+          <div class="text-xs text-slate-400 border-l border-slate-200 pl-3">
+            <i class="fa-solid fa-shield-halved text-emerald-500 mr-1"></i>学習利用なし(API準拠)
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="bg-white border-b border-slate-200 shadow-xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <nav class="flex space-x-8" aria-label="Tabs">
+        <button id="tab-daily-report" onclick="switchTab('daily-report')" class="tab-btn py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 border-sky-600 text-sky-600">
+          <i class="fa-solid fa-clipboard-check"></i>
+          <span>① 日報フィードバック生成 (伴走／改善要求)</span>
+        </button>
+        <button id="tab-interview-record" onclick="switchTab('interview-record')" class="tab-btn py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300">
+          <i class="fa-solid fa-comments"></i>
+          <span>② 面談議事録・合意メール作成 (6項目の型)</span>
+        </button>
+        <button id="tab-log-history" onclick="switchTab('log-history')" class="tab-btn py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300">
+          <i class="fa-solid fa-box-archive"></i>
+          <span>③ 証拠記録台帳 (<span id="log-count-badge">0</span>件)</span>
+        </button>
+      </nav>
+    </div>
+  </div>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full">
+    <!-- Notice Banner -->
+    <div class="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 flex items-start space-x-3">
+      <i class="fa-solid fa-triangle-exclamation text-amber-600 mt-0.5 text-sm"></i>
+      <div>
+        <span class="font-bold">労務コンプライアンス遵守チェック（ヒューマン・イン・ザ・ループ）:</span>
+        AIの出力文は「下書き」です。AIは話していない事実を捏造（ハルシネーション）する可能性があるため、必ず管理職本人が目を通し、事実と整合しているかを確認・手直ししてから確定してください。そのまま丸投げ送付することは厳禁です。
+      </div>
+    </div>
+
+    <section id="pane-daily-report" class="tab-pane space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Left: Input Form -->
+        <div class="lg:col-span-6 bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col space-y-4">
+          <div class="flex justify-between items-center pb-3 border-b border-slate-100">
+            <h2 class="text-base font-bold text-slate-900 flex items-center space-x-2">
+              <span class="w-6 h-6 rounded-full bg-sky-100 text-sky-700 text-xs font-bold flex items-center justify-center">1</span>
+              <span>部下の日報入力 & 指導設定</span>
+            </h2>
+            <button onclick="loadDailyReportSample()" class="text-xs text-sky-600 hover:text-sky-700 font-medium flex items-center space-x-1 hover:underline">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>セミナー事例を引用</span>
+            </button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">対象社員氏名</label>
+              <input type="text" id="dr-employee-name" placeholder="例: 営業部 山田太郎" class="w-full text-sm px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">対象日付</label>
+              <input type="date" id="dr-date" class="w-full text-sm px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-none">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">指導の段階 (トーン選択)</label>
+            <div class="grid grid-cols-2 gap-3">
+              <label class="relative flex flex-col p-3 border-2 border-sky-500 bg-sky-50/50 rounded-xl cursor-pointer hover:bg-sky-50 transition-all" id="label-tone-growth">
+                <input type="radio" name="dr-tone" value="growth" checked onchange="updateToneSelection()" class="sr-only">
+                <span class="text-xs font-bold text-sky-900 flex items-center justify-between">
+                  <span>伴走型 (優しいトーン)</span>
+                  <i class="fa-solid fa-circle-check text-sky-600"></i>
+                </span>
+                <span class="text-[11px] text-slate-600 mt-1">改善余地があり関係維持重視。承認＋深掘りの質問中心。</span>
+              </label>
+              <label class="relative flex flex-col p-3 border-2 border-slate-200 bg-white rounded-xl cursor-pointer hover:bg-slate-50 transition-all" id="label-tone-strict">
+                <input type="radio" name="dr-tone" value="strict" onchange="updateToneSelection()" class="sr-only">
+                <span class="text-xs font-bold text-slate-900 flex items-center justify-between">
+                  <span>改善要求型 (厳格トーン)</span>
+                  <i class="fa-regular fa-circle text-slate-400"></i>
+                </span>
+                <span class="text-[11px] text-slate-600 mt-1">改善が見られず記録化。要求水準と期限明示、人事措置の布石。</span>
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">部下が提出した日報の原文</label>
+            <textarea id="dr-raw-text" rows="7" placeholder="部下の日報テキストをそのまま貼り付けます（要約せずに渡すことでAIが事実関係を精査します）" class="w-full text-sm p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-none custom-scrollbar"></textarea>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">上司が特に指導・指摘したい懸念点 (任意メモ)</label>
+            <input type="text" id="dr-supervisor-note" placeholder="例: 午前中の顧客検索だけで終わっており実電がゼロ。午後も不在ばかりで再訪計画がない。" class="w-full text-sm px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-none">
+          </div>
+
+          <button id="btn-generate-dr" onclick="generateDailyReportFeedback()" class="w-full py-3 px-4 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white font-semibold rounded-xl shadow-sm hover:shadow transition-all flex items-center justify-center space-x-2">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span>AI指導コメント下書きを生成</span>
+          </button>
+        </div>
+
+        <div class="lg:col-span-6 bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col space-y-4">
+          <div class="flex justify-between items-center pb-3 border-b border-slate-100">
+            <h2 class="text-base font-bold text-slate-900 flex items-center space-x-2">
+              <span class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold flex items-center justify-center">2</span>
+              <span>上司による事実確認 & 編集 (証拠化確定)</span>
+            </h2>
+            <span class="text-xs text-slate-400"><i class="fa-solid fa-pen-nib mr-1"></i>必ず加筆修正を行ってください</span>
+          </div>
+
+          <!-- Loading state -->
+          <div id="dr-loading" class="hidden flex-1 flex-col items-center justify-center py-16 space-y-3">
+            <div class="w-10 h-10 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin"></div>
+            <p class="text-xs text-slate-500 font-medium">向井蘭弁護士の指導フレームワークに沿って文案生成中...</p>
+          </div>
+
+          <!-- Editor box -->
+          <div id="dr-result-container" class="flex-1 flex flex-col space-y-3">
+            <div class="flex items-center justify-between text-xs text-slate-500">
+              <span>【構造】事実の指摘 ＋ 深掘りの問い ＋ 次の行動提案</span>
+              <button onclick="copyElementText('dr-final-text')" class="text-sky-600 hover:text-sky-800 flex items-center space-x-1">
+                <i class="fa-regular fa-copy"></i>
+                <span>コピー</span>
+              </button>
+            </div>
+
+            <textarea id="dr-final-text" rows="13" class="w-full flex-1 text-sm p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none custom-scrollbar leading-relaxed" placeholder="AIによる生成コメントがここに表示されます。上司が内容を確認し、事実との齟齬がないように修正してください。"></textarea>
+
+            <!-- Human-in-the-loop acknowledgment -->
+            <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+              <label class="flex items-start space-x-2.5 cursor-pointer">
+                <input type="checkbox" id="dr-confirm-check" class="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 border-slate-300">
+                <span class="text-xs text-slate-700 font-medium leading-tight">
+                  【必須確認】日報に書かれていない虚偽の内容が含まれていないことを確認し、人格否定や暴言などのパワハラ的表現がないことを検証しました。
+                </span>
+              </label>
+            </div>
+
+            <button id="btn-save-dr" onclick="commitDailyReportRecord()" class="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-sm hover:shadow transition-all flex items-center justify-center space-x-2">
+              <i class="fa-solid fa-stamp"></i>
+              <span>指導記録として台帳に確定保存</span>
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <section id="pane-interview-record" class="tab-pane hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Left: Input and Settings -->
+        <div class="lg:col-span-5 bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col space-y-4">
+          <div class="flex justify-between items-center pb-3 border-b border-slate-100">
+            <h2 class="text-base font-bold text-slate-900 flex items-center space-x-2">
+              <span class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center">1</span>
+              <span>面談の文字起こし・メモ入力</span>
+            </h2>
+            <button onclick="loadInterviewSample()" class="text-xs text-indigo-600 hover:text-indigo-700 font-medium flex items-center space-x-1 hover:underline">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>面談サンプル読込</span>
+            </button>
+          </div>
+
+          <!-- Consent Guard (Warning from seminar) -->
+          <div class="p-3 bg-red-50 border border-red-200 rounded-xl space-y-1.5">
+            <label class="flex items-start space-x-2.5 cursor-pointer">
+              <input type="checkbox" id="ir-consent-check" class="mt-0.5 rounded text-red-600 focus:ring-red-500 w-4 h-4 border-red-300">
+              <span class="text-xs text-red-900 font-bold leading-tight">
+                【重要】面談の録音について、事前に本人へ目的（認識齟齬防止と正確な記録）を告知し、承諾を得ています。
+              </span>
+            </label>
+            <p class="text-[11px] text-red-700 pl-6.5">※無断録音は信頼関係を決定的に破壊するためセミナーでも固く禁止されています。</p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">対象社員氏名</label>
+              <input type="text" id="ir-employee-name" placeholder="例: 佐藤次郎" class="w-full text-sm px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">面談実施日・場所</label>
+              <input type="text" id="ir-datetime-place" placeholder="例: 2026/09/15 14:00 第2会議室" class="w-full text-sm px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">出席者（役職・氏名）</label>
+            <input type="text" id="ir-attendees" placeholder="例: 営業部長 鈴木（上司）、佐藤次郎（本人）" class="w-full text-sm px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">面談の目的</label>
+            <input type="text" id="ir-purpose" placeholder="例: 提出書類の遅延改善および今後の業務進行についての個別指導" class="w-full text-sm px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">面談の音声書き起こし／会話メモ（箇条書き可）</label>
+            <textarea id="ir-raw-transcript" rows="6" placeholder="文字起こしツール（Whisper等）の出力テキストや、面談中の粗いメモをそのまま貼り付けます。" class="w-full text-sm p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none custom-scrollbar"></textarea>
+          </div>
+
+          <button id="btn-generate-ir" onclick="generateInterviewMinutes()" class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-sm hover:shadow transition-all flex items-center justify-center space-x-2">
+            <i class="fa-solid fa-layer-group"></i>
+            <span>弁護士推奨「6項目の型」へAI自動整形</span>
+          </button>
+        </div>
+
+        <div class="lg:col-span-7 bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col space-y-4">
+          <div class="flex justify-between items-center pb-3 border-b border-slate-100">
+            <h2 class="text-base font-bold text-slate-900 flex items-center space-x-2">
+              <span class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold flex items-center justify-center">2</span>
+              <span>議事録下書き & 送信用メール文面（合意形成）</span>
+            </h2>
+            <span class="text-xs text-slate-500">当日中にメール本文貼付で送信</span>
+          </div>
+
+          <div id="ir-loading" class="hidden flex-1 flex-col items-center justify-center py-20 space-y-3">
+            <div class="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+            <p class="text-xs text-slate-500 font-medium">「6項目」に峻別して合意形成用メール文面を構築中...</p>
+          </div>
+
+          <div id="ir-result-container" class="flex-1 flex flex-col space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="text-xs text-slate-500 font-medium">
+                <i class="fa-solid fa-circle-info text-sky-500 mr-1"></i>
+                添付ファイルではなく、メール本文に貼り付けて返信期限を切ることで法的な合意の証拠になります。
+              </div>
+              <button onclick="copyElementText('ir-final-text')" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center space-x-1">
+                <i class="fa-regular fa-copy"></i>
+                <span>メール本文をコピー</span>
+              </button>
+            </div>
+
+            <textarea id="ir-final-text" rows="15" class="w-full flex-1 text-sm p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none custom-scrollbar leading-relaxed font-mono" placeholder="AIにより整形された面談議事録と、本人宛ての確認依頼メール文面がここに表示されます。"></textarea>
+
+            <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+              <label class="flex items-start space-x-2.5 cursor-pointer">
+                <input type="checkbox" id="ir-confirm-check" class="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 border-slate-300">
+                <span class="text-xs text-slate-700 font-medium leading-tight">
+                  【事実確認済】客観的事実と本人の主観意見が正しく分離され、合意したアクションプランの担当・期限が正確であることを承認します。
+                </span>
+              </label>
+            </div>
+
+            <button id="btn-save-ir" onclick="commitInterviewRecord()" class="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-sm hover:shadow transition-all flex items-center justify-center space-x-2">
+              <i class="fa-solid fa-box-archive"></i>
+              <span>面談議事録台帳に登録 & タイムスタンプ付与</span>
+            </button>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <section id="pane-log-history" class="tab-pane hidden space-y-6">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
+          <div>
+            <h2 class="text-base font-bold text-slate-900 flex items-center space-x-2">
+              <span>紛争防御用 指導・面談記録台帳</span>
+              <span class="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-semibold border border-slate-300" id="total-logs-indicator">0 件</span>
+            </h2>
+            <p class="text-xs text-slate-500">労基署・あっせん・労働審判・裁判で「指導の積み重ね」を立証する確定ログです。</p>
+          </div>
+          <div class="flex items-center space-x-2">
+            <select id="filter-log-type" onchange="renderLogTable()" class="text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500">
+              <option value="all">すべての記録種別</option>
+              <option value="daily_report">日報指導フィードバック</option>
+              <option value="interview">面談議事録 (6項目の型)</option>
+            </select>
+            <button onclick="clearAllLogs()" class="text-xs px-3 py-2 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg transition-colors border border-rose-200">
+              <i class="fa-regular fa-trash-can mr-1"></i>台帳クリア
+            </button>
+          </div>
+        </div>
+
+        <!-- Log List Table / Cards -->
+        <div id="log-list-container" class="space-y-3">
+          <!-- Populated by JavaScript -->
+        </div>
+
+        <div id="empty-log-state" class="py-12 text-center text-slate-400 space-y-2">
+          <i class="fa-regular fa-folder-open text-3xl"></i>
+          <p class="text-sm">保存された記録はまだありません。</p>
+          <p class="text-xs">日報のフィードバックや面談議事録を確定すると、こちらに客観的証拠として時系列で保存されます。</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modal for viewing full record -->
+  <div id="view-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-200">
+      <div class="px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+        <div>
+          <h3 id="modal-title" class="font-bold text-slate-900 text-base">指導記録詳細</h3>
+          <p id="modal-meta" class="text-xs text-slate-500 mt-0.5"></p>
+        </div>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg p-1">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="p-6 flex-1 overflow-y-auto custom-scrollbar">
+        <pre id="modal-body" class="text-xs sm:text-sm text-slate-800 whitespace-pre-wrap font-sans leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-200"></pre>
+      </div>
+      <div class="px-6 py-3 border-t border-slate-200 flex justify-between items-center bg-slate-50 rounded-b-2xl">
+        <span class="text-xs text-slate-400"><i class="fa-solid fa-lock mr-1"></i>改ざん防止ログ形式</span>
+        <div class="flex space-x-2">
+          <button onclick="copyModalContent()" class="px-3 py-1.5 text-xs bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-slate-700 font-medium flex items-center space-x-1">
+            <i class="fa-regular fa-copy"></i>
+            <span>内容をコピー</span>
+          </button>
+          <button onclick="closeModal()" class="px-4 py-1.5 text-xs bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-medium">
+            閉じる
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Box -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 max-w-md bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center space-x-3 text-xs sm:text-sm">
+    <i id="toast-icon" class="fa-solid fa-circle-check text-emerald-400 text-base"></i>
+    <span id="toast-message" class="flex-1 font-medium">メッセージ</span>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'ai_labor_guidance_logs_v1';
+    let records = [];
+
+    // In-memory load
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        records = JSON.parse(stored);
+      }
+    } catch (e) {
+      console.warn('LocalStorage unavailable or restricted:', e);
+      records = [];
+    }
+
+    // Default today date
+    document.addEventListener('DOMContentLoaded', () => {
+      const today = new Date().toISOString().split('T')[0];
+      const dateEl = document.getElementById('dr-date');
+      if (dateEl) dateEl.value = today;
+      renderLogTable();
+    });
+
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      const msg = document.getElementById('toast-message');
+      const icon = document.getElementById('toast-icon');
+
+      msg.textContent = message;
+      if (type === 'success') {
+        icon.className = 'fa-solid fa-circle-check text-emerald-400 text-base';
+      } else if (type === 'error') {
+        icon.className = 'fa-solid fa-triangle-exclamation text-rose-400 text-base';
+      } else {
+        icon.className = 'fa-solid fa-circle-info text-sky-400 text-base';
+      }
+
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 4000);
+    }
+
+    function copyElementText(elementId) {
+      const el = document.getElementById(elementId);
+      if (!el || !el.value) {
+        showToast('コピーする内容がありません', 'error');
+        return;
+      }
+      el.select();
+      document.execCommand('copy');
+      showToast('クリップボードにコピーしました');
+    }
+
+    function closeModal() {
+      document.getElementById('view-modal').classList.add('hidden');
+    }
+
+    function copyModalContent() {
+      const body = document.getElementById('modal-body').textContent;
+      const dummy = document.createElement('textarea');
+      document.body.appendChild(dummy);
+      dummy.value = body;
+      dummy.select();
+      document.execCommand('copy');
+      document.body.removeChild(dummy);
+      showToast('記録内容をコピーしました');
+    }
+
+    function switchTab(tabKey) {
+      const tabs = ['daily-report', 'interview-record', 'log-history'];
+      tabs.forEach(t => {
+        const pane = document.getElementById(`pane-${t}`);
+        const btn = document.getElementById(`tab-${t}`);
+        if (t === tabKey) {
+          pane.classList.remove('hidden');
+          btn.classList.remove('border-transparent', 'text-slate-500');
+          btn.classList.add('border-sky-600', 'text-sky-600');
+        } else {
+          pane.classList.add('hidden');
+          btn.classList.add('border-transparent', 'text-slate-500');
+          btn.classList.remove('border-sky-600', 'text-sky-600');
+        }
+      });
+      if (tabKey === 'log-history') {
+        renderLogTable();
+      }
+    }
+
+    function updateToneSelection() {
+      const selected = document.querySelector('input[name="dr-tone"]:checked').value;
+      const gLabel = document.getElementById('label-tone-growth');
+      const sLabel = document.getElementById('label-tone-strict');
+
+      if (selected === 'growth') {
+        gLabel.className = 'relative flex flex-col p-3 border-2 border-sky-500 bg-sky-50/50 rounded-xl cursor-pointer hover:bg-sky-50 transition-all';
+        sLabel.className = 'relative flex flex-col p-3 border-2 border-slate-200 bg-white rounded-xl cursor-pointer hover:bg-slate-50 transition-all';
+        gLabel.querySelector('i').className = 'fa-solid fa-circle-check text-sky-600';
+        sLabel.querySelector('i').className = 'fa-regular fa-circle text-slate-400';
+      } else {
+        sLabel.className = 'relative flex flex-col p-3 border-2 border-amber-500 bg-amber-50/50 rounded-xl cursor-pointer hover:bg-amber-50 transition-all';
+        gLabel.className = 'relative flex flex-col p-3 border-2 border-slate-200 bg-white rounded-xl cursor-pointer hover:bg-slate-50 transition-all';
+        sLabel.querySelector('i').className = 'fa-solid fa-circle-check text-amber-600';
+        gLabel.querySelector('i').className = 'fa-regular fa-circle text-slate-400';
+      }
+    }
+
+    function loadDailyReportSample() {
+      document.getElementById('dr-employee-name').value = '営業部 田中健一';
+      document.getElementById('dr-raw-text').value = 
+`【本日の業務実績】
+・9:00〜12:00　新規開拓用の見込み顧客リスト検索・抽出作業（Webにて検索）
+・13:00〜14:30　A社へ架電（担当者会議中につき不在）、B社へ架電（広告は不要とのことで終了）
+・14:30〜16:00　C社向け提案書の下書き作成（テンプレート参照）
+・16:00〜18:00　社内データ整理および明日の準備
+
+【所感・改善点】
+引き続き、営業活動を継続して参ります。`;
+      document.getElementById('dr-supervisor-note').value = 
+'午前中3時間も顧客検索で終わり架電がわずか2件。不在や不要で終わっており代替アプローチや再接触タイミングの記載がない。「継続して参ります」だけで反省がない点を指摘したい。';
+      showToast('セミナー第5部の日報事例を反映しました');
+    }
+
+    function loadInterviewSample() {
+      document.getElementById('ir-employee-name').value = '総務部 佐藤次郎';
+      document.getElementById('ir-datetime-place').value = '2026年9月15日 14:00〜14:40 社内第2会議室';
+      document.getElementById('ir-attendees').value = '高橋部長（上司）、佐藤次郎（本人）';
+      document.getElementById('ir-purpose').value = '週次報告書の継続的な提出遅延に関する事実確認および業務改善指導';
+      document.getElementById('ir-consent-check').checked = true;
+      document.getElementById('ir-raw-transcript').value = 
+`高橋部長「佐藤さん、今日は先ほど確認した通り、今後の認識の食い違いを防ぎ業務を改善するために録音しながら議事録を作成しますね。」
+佐藤「はい、了解しました。」
+高橋部長「まず共有したい客観的な事実ですが、毎週月曜11時必着の週次報告書が、過去1ヶ月（8/18, 8/25, 9/1, 9/8）で4回すべて期限を過ぎて火曜日午後の提出になっていました。これは事実ですね？」
+佐藤「はい、遅れたことは間違いありません。ただ言い訳になってしまいますが、現場からの資材問い合わせと突発的な伝票入力が重なって、どうしても月曜午前中に自分の時間が取れなかったんです。」
+高橋部長「なるほど、複数業務の重複が原因ということですね。ただ、週次報告書は経営陣への報告用でもあり遅延は認められません。遅れそうなら事前に相談するか、前週金曜日にドラフトを作るなどの対策が必要です。」
+佐藤「確かに事前の相談は怠っていました。タスクの優先順位付けが苦手な部分もあります。」
+高橋部長「では今後のアクションプランを合意しましょう。次回9月15日の週報からは、前週金曜17時までにセルフチェックリストを作成して提出ドラフトを保存すること。そして月曜9時30分の段階で進捗を私に一声かけること。私の方でも、月曜午前中は佐藤さんに突発業務が集中しないようチーム内で振り分けを調整します。」
+佐藤「承知しました。金曜日のうちに下書きを終えるように徹底します。」`;
+      showToast('セミナー第6部の面談議事録サンプルを反映しました');
+    }
+
+    async function callGeminiApi(systemPrompt, userQuery) {
+      const apiKey = ""; // Canvas runtime injection
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+      const payload = {
+        contents: [{ parts: [{ text: userQuery }] }],
+        systemInstruction: {
+          parts: [{ text: systemPrompt }]
+        }
+      };
+
+      // Exponential backoff implementation
+      const delays = [1000, 2000, 4000];
+      for (let attempt = 0; attempt <= delays.length; attempt++) {
+        try {
+          const res = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) return text;
+          }
+        } catch (e) {
+          // retry on fail
+        }
+        if (attempt < delays.length) {
+          await new Promise(r => setTimeout(r, delays[attempt]));
+        }
+      }
+      throw new Error('API呼び出しに失敗しました。時間をおいて再試行してください。');
+    }
+
+    async function generateDailyReportFeedback() {
+      const empName = document.getElementById('dr-employee-name').value.trim() || '対象社員';
+      const rawReport = document.getElementById('dr-raw-text').value.trim();
+      const supervisorNote = document.getElementById('dr-supervisor-note').value.trim();
+      const tone = document.querySelector('input[name="dr-tone"]:checked').value;
+
+      if (!rawReport) {
+        showToast('部下の日報原文を入力してください', 'error');
+        return;
+      }
+
+      const loadingEl = document.getElementById('dr-loading');
+      const resultContainer = document.getElementById('dr-result-container');
+      const finalTextEl = document.getElementById('dr-final-text');
+      const confirmCheck = document.getElementById('dr-confirm-check');
+      confirmCheck.checked = false;
+
+      loadingEl.classList.remove('hidden');
+      resultContainer.classList.add('hidden');
+
+      const systemPrompt = `
+あなたは労働法実務（特に問題社員対応・紛争予防）に精通した弁護士（向井蘭弁護士のメソッド）に基づく、上司向け指導支援AIです。
+上司が部下の日報に対して返信する【指導フィードバックコメントの下書き】を作成してください。
+
+【最重要ルール】
+1. 「了解」「引き続き頑張って」などの形骸化した一言コメントは絶対に出力しないこと。
+2. 感情的な叱責、人格否定、当てこすり、「いつも」「絶対に」といった過度な一般化を完全に排除すること（パワハラリスクの徹底防止）。
+3. 構成は必ず以下の3部構成とすること:
+   - 【1. 事実の指摘】: 日報に記載された客観的事実・数値・時間の使い方を冷静に指摘する。
+   - 【2. 深掘りの問い】: 部下に自ら考えさせ、認知的不協和を和らげて現実認識を促す質問（なぜそうなったか、顧客視点でどう見えるか）。
+   - 【3. 次のアクション提案】: 明日以降の具体的かつ小さな行動目標の提示。
+
+【トーンの指定】
+指定トーン: ${tone === 'growth' ? '伴走型（優しいトーン）: 承認・努力への労いから入り、問いかけを通じて自己内省を深めさせる' : '改善要求型（厳格トーン）: 求める業務水準と達成期限を明示し、改善が見られない場合の指導記録として後の人事措置の正当な根拠となるよう毅然と書く'}
+`;
+
+      const userPrompt = `
+【対象者】: ${empName}
+【部下の日報本文】:
+${rawReport}
+
+【上司からの補足・指導したい論点】:
+${supervisorNote || '特になし（日報内容から客観的に改善点を導出してください）'}
+
+上記日報に対して、上司がそのまま部下へ送信・対話できるよう、具体的かつ実践的な指導コメント文を作成してください。
+`;
+
+      try {
+        const generated = await callGeminiApi(systemPrompt, userPrompt);
+        finalTextEl.value = generated;
+        loadingEl.classList.add('hidden');
+        resultContainer.classList.remove('hidden');
+        showToast('AI指導コメントの下書きを生成しました');
+      } catch (err) {
+        loadingEl.classList.add('hidden');
+        resultContainer.classList.remove('hidden');
+        showToast(err.message, 'error');
+      }
+    }
+
+    function commitDailyReportRecord() {
+      const confirmCheck = document.getElementById('dr-confirm-check');
+      if (!confirmCheck.checked) {
+        showToast('事実確認とハルシネーション・パワハラ表現チェックボックスにチェックを入れてください', 'error');
+        return;
+      }
+
+      const empName = document.getElementById('dr-employee-name').value.trim() || '未設定';
+      const date = document.getElementById('dr-date').value || new Date().toISOString().split('T')[0];
+      const tone = document.querySelector('input[name="dr-tone"]:checked').value;
+      const rawText = document.getElementById('dr-raw-text').value.trim();
+      const finalText = document.getElementById('dr-final-text').value.trim();
+
+      if (!finalText) {
+        showToast('確定する指導コメントがありません', 'error');
+        return;
+      }
+
+      const newRecord = {
+        id: 'LOG-' + Date.now(),
+        type: 'daily_report',
+        typeName: '日報指導フィードバック',
+        employeeName: empName,
+        date: date,
+        tone: tone === 'growth' ? '伴走型' : '改善要求型',
+        rawText: rawText,
+        content: finalText,
+        createdAt: new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }),
+        timestamp: Date.now()
+      };
+
+      records.unshift(newRecord);
+      saveLogsToStorage();
+      showToast('指導記録を客観証拠台帳に確定保存しました');
+      switchTab('log-history');
+    }
+
+    async function generateInterviewMinutes() {
+      const consentCheck = document.getElementById('ir-consent-check');
+      if (!consentCheck.checked) {
+        showToast('面談の録音に対する本人告知・承諾の確認が必要です', 'error');
+        return;
+      }
+
+      const empName = document.getElementById('ir-employee-name').value.trim() || '対象社員';
+      const datetimePlace = document.getElementById('ir-datetime-place').value.trim() || '日時未指定';
+      const attendees = document.getElementById('ir-attendees').value.trim() || '出席者未指定';
+      const purpose = document.getElementById('ir-purpose').value.trim() || '業務指導';
+      const rawTranscript = document.getElementById('ir-raw-transcript').value.trim();
+
+      if (!rawTranscript) {
+        showToast('文字起こしまたは会話メモを入力してください', 'error');
+        return;
+      }
+
+      const loadingEl = document.getElementById('ir-loading');
+      const resultContainer = document.getElementById('ir-result-container');
+      const finalTextEl = document.getElementById('ir-final-text');
+      const confirmCheck = document.getElementById('ir-confirm-check');
+      confirmCheck.checked = false;
+
+      loadingEl.classList.remove('hidden');
+      resultContainer.classList.add('hidden');
+
+      const systemPrompt = `
+あなたは労働法実務（向井蘭弁護士のメソッド）に基づく面談議事録作成のエキスパートです。
+会話記録をもとに、万が一の紛争時に確実な客観的証拠となり、かつ従業員との合意を形成するための【面談議事録付き送信メール（本文貼り付け用）】を作成してください。
+
+【厳格な形式要件（弁護士推奨の6項目）】
+以下の構成を厳格に維持して出力してください:
+件名: 【議事録】YYYY年MM月DD日 面談の件（対象者氏名）
+
+1. 労いの言葉＆送付の目的
+   - 例: 「先ほどの面談、お疲れ様でした。認識の齟齬がないよう、本日合意した内容を議事録として送付します。」
+2. 面談議事録（6項目の型）
+   ① 基本情報: 日時、場所、出席者、面談の目的
+   ② 共有した事実: 感情や評価を排し、誰が見ても明らかな客観的事実・日時・回数・数値を具体的に記載（「いつも遅い」は不可）。
+   ③ 本人の意見: 本人の認識、原因についての言い分や発言内容をありのまま記載。
+   ④ 指導・伝達事項: 課題に対し上司として具体的に何を求め、どう指導したかを記録。
+   ⑤ アクションプラン: 双方が合意した「誰が」「いつまでに」「何をするか」（上司側の支援アクションも明記）。
+   ⑥ その他: 次回面談日やフォローアップの予定。
+3. 確認依頼と返信期限（重要）
+   - 「内容を確認し、事実と異なる点があれば【◯月◯日（面談の2〜3日後）】までに返信してください。特段の連絡がない場合は内容に合意いただいたものとして取り扱います。」と明記。
+4. 前向きな締め
+   - 「今回の面談は、あなたの成長と今後の活躍を期待して実施したものです。引き続きサポートします。」とフォローの姿勢を示す。
+`;
+
+      const userPrompt = `
+【対象者】: ${empName}
+【日時・場所】: ${datetimePlace}
+【出席者】: ${attendees}
+【目的】: ${purpose}
+【会話の記録・文字起こしメモ】:
+${rawTranscript}
+`;
+
+      try {
+        const generated = await callGeminiApi(systemPrompt, userPrompt);
+        finalTextEl.value = generated;
+        loadingEl.classList.add('hidden');
+        resultContainer.classList.remove('hidden');
+        showToast('「6項目の型」による議事録メール文面を生成しました');
+      } catch (err) {
+        loadingEl.classList.add('hidden');
+        resultContainer.classList.remove('hidden');
+        showToast(err.message, 'error');
+      }
+    }
+
+    function commitInterviewRecord() {
+      const confirmCheck = document.getElementById('ir-confirm-check');
+      if (!confirmCheck.checked) {
+        showToast('事実確認とアクションプラン合意チェックボックスにチェックを入れてください', 'error');
+        return;
+      }
+
+      const empName = document.getElementById('ir-employee-name').value.trim() || '未設定';
+      const finalText = document.getElementById('ir-final-text').value.trim();
+
+      if (!finalText) {
+        showToast('保存する議事録内容がありません', 'error');
+        return;
+      }
+
+      const newRecord = {
+        id: 'LOG-' + Date.now(),
+        type: 'interview',
+        typeName: '面談議事録 (6項目の型)',
+        employeeName: empName,
+        date: new Date().toISOString().split('T')[0],
+        content: finalText,
+        createdAt: new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }),
+        timestamp: Date.now()
+      };
+
+      records.unshift(newRecord);
+      saveLogsToStorage();
+      showToast('面談議事録を証拠台帳に確定保存しました');
+      switchTab('log-history');
+    }
+
+    function saveLogsToStorage() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+      } catch (e) {
+        console.warn('LocalStorage save failed:', e);
+      }
+      updateLogCountBadge();
+    }
+
+    function updateLogCountBadge() {
+      const badge = document.getElementById('log-count-badge');
+      const totalIndicator = document.getElementById('total-logs-indicator');
+      if (badge) badge.textContent = records.length;
+      if (totalIndicator) totalIndicator.textContent = `${records.length} 件`;
+    }
+
+    function renderLogTable() {
+      updateLogCountBadge();
+      const container = document.getElementById('log-list-container');
+      const emptyState = document.getElementById('empty-log-state');
+      const filter = document.getElementById('filter-log-type').value;
+
+      const filtered = records.filter(r => filter === 'all' || r.type === filter);
+
+      if (filtered.length === 0) {
+        container.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      container.innerHTML = filtered.map(item => {
+        const isDR = item.type === 'daily_report';
+        const badgeColor = isDR ? 'bg-sky-100 text-sky-800 border-sky-200' : 'bg-indigo-100 text-indigo-800 border-indigo-200';
+        const icon = isDR ? 'fa-clipboard-check' : 'fa-comments';
+        const preview = item.content.slice(0, 140).replace(/\n/g, ' ') + '...';
+
+        return `
+          <div class="p-4 bg-slate-50 hover:bg-slate-100/80 rounded-xl border border-slate-200 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex-1 min-w-0 space-y-1">
+              <div class="flex items-center space-x-2 flex-wrap gap-y-1">
+                <span class="text-xs px-2.5 py-0.5 rounded-full font-bold border ${badgeColor} flex items-center space-x-1">
+                  <i class="fa-solid ${icon} text-[10px]"></i>
+                  <span>${item.typeName}</span>
+                </span>
+                <span class="font-bold text-slate-900 text-sm">${escapeHtml(item.employeeName)}</span>
+                ${item.tone ? `<span class="text-xs text-slate-500 font-medium">(${item.tone})</span>` : ''}
+                <span class="text-xs text-slate-400">実施日: ${item.date}</span>
+                <span class="text-[11px] text-slate-400 bg-white px-2 py-0.5 rounded border border-slate-200"><i class="fa-solid fa-clock mr-1"></i>記録日時: ${item.createdAt}</span>
+              </div>
+              <p class="text-xs text-slate-600 line-clamp-2 leading-relaxed">${escapeHtml(preview)}</p>
+            </div>
+            <div class="flex items-center space-x-2 shrink-0">
+              <button onclick="viewRecordDetail('${item.id}')" class="px-3 py-1.5 text-xs bg-white hover:bg-slate-200 text-slate-700 font-medium rounded-lg border border-slate-300 transition-colors flex items-center space-x-1">
+                <i class="fa-regular fa-eye"></i>
+                <span>全文確認</span>
+              </button>
+              <button onclick="deleteRecord('${item.id}')" class="p-1.5 text-slate-400 hover:text-rose-600 rounded transition-colors" title="削除">
+                <i class="fa-regular fa-trash-can"></i>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function viewRecordDetail(id) {
+      const item = records.find(r => r.id === id);
+      if (!item) return;
+
+      document.getElementById('modal-title').textContent = `${item.typeName} - ${item.employeeName}`;
+      document.getElementById('modal-meta').textContent = `ID: ${item.id} | 対象日付: ${item.date} | 記録確定日時: ${item.createdAt}`;
+      document.getElementById('modal-body').textContent = item.content;
+      document.getElementById('view-modal').classList.remove('hidden');
+    }
+
+    function deleteRecord(id) {
+      records = records.filter(r => r.id !== id);
+      saveLogsToStorage();
+      renderLogTable();
+      showToast('記録を削除しました');
+    }
+
+    function clearAllLogs() {
+      if (records.length === 0) return;
+      records = [];
+      saveLogsToStorage();
+      renderLogTable();
+      showToast('台帳をクリアしました');
+    }
+
+    document.getElementById('btn-export-all').addEventListener('click', () => {
+      if (records.length === 0) {
+        showToast('エクスポート可能な記録がありません', 'error');
+        return;
+      }
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(records, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `労務指導面談台帳_${new Date().toISOString().split('T')[0]}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      showToast('全指導台帳データをJSON出力しました');
+    });
+
+    function escapeHtml(string) {
+      return String(string).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+  </script>
+</body>
+</html>
